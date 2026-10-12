@@ -78,4 +78,7 @@ button {
   border-radius: 8px;
   image-rendering: pixelated;
 }
+.device { margin: 0 0 24px; text-align: center; }
+.device svg { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto 10px; }
+.device figcaption { color: var(--muted); font-size: 0.95rem; }
 footer { color: var(--muted); font-size: 0.9rem; text-align: center; }
