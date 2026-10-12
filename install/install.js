@@ -48,12 +48,12 @@
       region: fields.region.value.trim().toLowerCase(),
     };
     if (!OPENAI_KEY_PATTERN.test(keys.openai)) {
-      showError('A chave da OpenAI começa por «sk-». Copia-a outra vez da página da OpenAI.');
+      showError('An OpenAI key starts with “sk-”. Copy it again from the OpenAI page.');
       return;
     }
     if (keys.azure || keys.region) {
       if (!AZURE_KEY_PATTERN.test(keys.azure) || !AZURE_REGION_PATTERN.test(keys.region)) {
-        showError('Para a voz de Portugal são precisas a chave e a região do Azure Speech, por exemplo westeurope. Deixa as duas em branco para usar a voz do R1.');
+        showError('The Portugal voice needs both the Azure Speech key and its region, for example westeurope. Leave both empty to use the R1’s own voice.');
         return;
       }
     }
