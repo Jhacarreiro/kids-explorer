@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- The keys typed here must never leave this page: no network access at all. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Instalar o Explorador Curioso no Rabbit R1</title>
+  <link rel="stylesheet" href="install.css" />
+</head>
+<body>
+<main>
+  <h1>Instalar o Explorador Curioso</h1>
+  <p class="lead">Uma Creation para o Rabbit R1 em que uma criança faz perguntas por voz ou com uma foto e ouve respostas curtas em português de Portugal.</p>
+
+  <section>
+    <h2>Do que precisas</h2>
+    <ol>
+      <li><strong>Um Rabbit R1</strong> ligado à internet.</li>
+      <li><strong>Uma chave da API da OpenAI</strong>, criada em <a href="https://platform.openai.com/api-keys" rel="noreferrer">platform.openai.com/api-keys</a>, numa conta com saldo. As respostas usam o modelo GPT-5.6 Luna e cada pergunta custa uma fração de cêntimo. Cria uma chave só para isto e define um limite de gastos no projeto da OpenAI.</li>
+      <li><strong>Opcional: uma chave do Azure Speech</strong> e a sua região, para as respostas serem lidas com uma voz de Portugal. O plano gratuito F0 chega para uso em família. Sem ela, o R1 lê as respostas com a voz dele.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Gera o teu código QR</h2>
+    <p class="note">Tudo acontece neste browser. Esta página não tem acesso à internet e não envia as chaves para lado nenhum: ficam apenas dentro do código QR e, depois de instalado, no R1, que fala diretamente com a OpenAI e com a Azure.</p>
+    <form id="keys" autocomplete="off">
+      <label for="openai">Chave da API da OpenAI</label>
+      <input id="openai" type="password" placeholder="sk-..." spellcheck="false" required />
+      <label for="azure">Chave do Azure Speech <span>(opcional)</span></label>
+      <input id="azure" type="password" spellcheck="false" />
+      <label for="region">Região do Azure Speech <span>(opcional, por exemplo westeurope)</span></label>
+      <input id="region" type="text" spellcheck="false" />
+      <p id="error" class="error" role="alert" hidden></p>
+      <button type="submit">Gerar código QR</button>
+    </form>
+  </section>
+
+  <section id="result" hidden>
+    <h2>Lê-o com o R1</h2>
+    <img id="qr" alt="Código QR de instalação do Explorador Curioso" />
+    <ol>
+      <li>No R1, abre o cartão <strong>Creations</strong>.</li>
+      <li>No separador <strong>Create</strong>, escolhe <strong>Add via QR code</strong> e lê este código.</li>
+      <li>Abre <strong>Explorador Curioso</strong> e toca no coelho para fazer uma pergunta.</li>
+    </ol>
+    <p class="warning">Este código contém as tuas chaves. Não o partilhes nem o guardes numa fotografia: quem o ler usa a tua conta. Se o perderes de vista, apaga a chave na OpenAI e gera um novo.</p>
+    <button id="clear" type="button">Apagar o código</button>
+  </section>
+
+  <footer>
+    <p>O código fonte está no <a href="https://github.com/Jhacarreiro/kids-explorer" rel="noreferrer">GitHub</a>.</p>
+  </footer>
+</main>
+<script src="qrcode.js"></script>
+<script src="install.js"></script>
+</body>
+</html>

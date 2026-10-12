@@ -1,0 +1,1894 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=240, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Explorador Curioso</title>
+  <style>
+    /* The rabbit is the voice button. Each state of #app[data-state] changes
+       its face, the glow behind it and the bubble above it, so a child who
+       cannot read still sees what is happening. */
+    :root {
+      --night: #161A3F;
+      --ink: #1B1F45;
+      --fur: #F3EEFF;
+      --pink: #FF5A92;
+      --teal: #22B8C8;
+      --sun: #FFD54A;
+      --lilac: #C9C9F5;
+    }
+    *, *::before, *::after {
+      margin: 0; padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 240px; height: 282px;
+      overflow: hidden;
+      font-family: 'Nunito', 'Arial Rounded MT Bold', Roboto, Arial, sans-serif;
+      color: #fff;
+    }
+    body {
+      background:
+        radial-gradient(1.5px 1.5px at 30px 40px, #fff 50%, transparent 51%),
+        radial-gradient(1.5px 1.5px at 206px 70px, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 172px 112px, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 52px 150px, #cfd3ff 50%, transparent 51%),
+        radial-gradient(1px 1px at 20px 230px, #cfd3ff 50%, transparent 51%),
+        radial-gradient(120% 80% at 50% 0%, #2B3275 0%, var(--night) 60%, #10132E 100%);
+    }
+    [hidden] { display: none !important; }
+    button { font: inherit; color: inherit; touch-action: manipulation; cursor: pointer; }
+
+    /* ─── Main screen ───────────────────────────────── */
+    #app {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 240px; height: 282px;
+      padding: 12px 10px 10px;
+    }
+    #about-btn {
+      position: absolute;
+      top: 6px; right: 6px;
+      width: 28px; height: 28px;
+      display: grid; place-items: center;
+      border: 1.5px solid rgba(255,255,255,0.28);
+      border-radius: 50%;
+      background: transparent;
+      color: rgba(255,255,255,0.55);
+    }
+    #about-btn svg { width: 14px; height: 14px; }
+    #about-btn:disabled { opacity: 0.3; }
+
+    #bubble {
+      position: relative;
+      max-width: 168px;
+      min-height: 34px;
+      padding: 7px 14px;
+      border-radius: 16px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.3;
+      text-align: center;
+    }
+    #bubble::after {
+      content: "";
+      position: absolute;
+      left: 50%; bottom: -8px;
+      margin-left: -8px;
+      border: 8px solid transparent;
+      border-top-color: #fff;
+      border-bottom: 0;
+    }
+    #app[data-state="thinking"] #voice-label::after {
+      content: "";
+      display: inline-block;
+      width: 1.2em;
+      text-align: left;
+      animation: dots 1.2s steps(4) infinite;
+    }
+
+    #voice-btn {
+      position: relative;
+      flex-shrink: 0;
+      width: 150px; height: 150px;
+      margin-top: 4px;
+      display: grid; place-items: center;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+    }
+    #voice-btn::before {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      border: 3px dashed rgba(255,143,184,0.75);
+    }
+    #voice-btn:active .bunny { transform: scale(0.94); }
+    #voice-btn:disabled { cursor: wait; }
+    .bunny { position: relative; width: 120px; height: 132px; transition: transform 0.1s; }
+
+    #status {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 0 52px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+      text-align: center;
+      color: var(--lilac);
+    }
+    #camera-btn {
+      position: absolute;
+      right: 10px; bottom: 10px;
+      width: 52px; height: 52px;
+      display: grid; place-items: center;
+      border: none;
+      border-radius: 50%;
+      background: var(--teal);
+      color: #0C1D33;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    }
+    #camera-btn svg { width: 28px; height: 28px; }
+    #camera-btn:disabled { opacity: 0.35; }
+    /* Hear the last answer again; only while the conversation is fresh. */
+    #replay-btn {
+      position: absolute;
+      left: 10px; bottom: 10px;
+      width: 52px; height: 52px;
+      display: grid; place-items: center;
+      border: none;
+      border-radius: 50%;
+      background: var(--sun);
+      color: #0C1D33;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    }
+    #replay-btn svg { width: 28px; height: 28px; }
+
+    /* ─── Rabbit faces per state ────────────────────── */
+    .face { display: none; }
+    #app[data-state="idle"] .face-happy,
+    #app[data-state="starting"] .face-listen,
+    #app[data-state="listening"] .face-listen,
+    #app[data-state="thinking"] .face-think,
+    #app[data-state="speaking"] .face-speak,
+    #app[data-state="error"] .face-oops,
+    #app[data-state="unavailable"] .face-oops { display: inline; }
+
+    #app[data-state="starting"] #voice-btn::before,
+    #app[data-state="listening"] #voice-btn::before {
+      inset: -4px;
+      border: 0;
+      background: radial-gradient(circle, rgba(255,90,146,0.55) 0%, rgba(255,90,146,0) 70%);
+      animation: breathe 0.8s ease-in-out infinite alternate;
+    }
+    #app[data-state="listening"] .ears { animation: perk 0.8s ease-in-out infinite alternate; transform-origin: 50px 52px; }
+    #app[data-state="thinking"] #voice-btn::before { border-color: rgba(201,201,245,0.35); animation: spin 6s linear infinite; }
+    #app[data-state="speaking"] #voice-btn::before {
+      inset: -4px;
+      border: 0;
+      background: radial-gradient(circle, rgba(255,213,74,0.5) 0%, rgba(255,213,74,0) 70%);
+      animation: breathe 0.5s ease-in-out infinite alternate;
+    }
+    #app[data-state="speaking"] .mouth-open { animation: talk 0.32s ease-in-out infinite alternate; transform-origin: 50px 91px; }
+    #app[data-state="error"] #voice-btn::before,
+    #app[data-state="unavailable"] #voice-btn::before { border: 3px solid var(--sun); }
+
+    #voice-btn:focus-visible, #camera-btn:focus-visible, #about-btn:focus-visible,
+    #about-close:focus-visible, #camera-actions button:focus-visible, #replay-btn:focus-visible,
+    #about-panel button:focus-visible, #history-panel button:focus-visible {
+      outline: 3px solid var(--sun);
+      outline-offset: 2px;
+    }
+
+    /* ─── About (for adults) ────────────────────────── */
+    #about-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 240px; height: 282px;
+      overflow-y: auto;
+      padding: 12px 16px;
+      gap: 6px;
+      color: var(--fur);
+      text-align: center;
+    }
+    #about-title { font-size: 16px; }
+    #about-name { font-size: 13px; font-weight: bold; }
+    #about-version { font-size: 16px; font-weight: bold; color: var(--sun); }
+    #about-published { font-size: 12px; line-height: 1.5; color: var(--lilac); }
+    #about-creator { font-size: 12px; line-height: 1.4; color: var(--lilac); }
+    #about-creator a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 2px;
+      color: #fff;
+      font-weight: bold;
+      text-underline-offset: 3px;
+      touch-action: manipulation;
+    }
+    #about-creator a:focus-visible { outline: 2px solid var(--sun); outline-offset: 2px; }
+    /* Adult settings: the child's age, sent with every question. */
+    #age-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    #age-row button {
+      width: 30px; height: 30px;
+      border: 1.5px solid rgba(255,255,255,0.4);
+      border-radius: 50%;
+      background: transparent;
+      font-size: 18px;
+      font-weight: bold;
+      line-height: 1;
+    }
+    #age-row button:disabled { opacity: 0.3; }
+    #age-value { min-width: 54px; color: var(--sun); }
+    .panel-btn {
+      width: 176px; height: 32px;
+      border: 1.5px solid rgba(255,255,255,0.4);
+      border-radius: 16px;
+      background: transparent;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    #about-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 176px; height: 40px;
+      margin-top: 2px;
+      border: none;
+      border-radius: 22px;
+      background: var(--pink);
+      color: #fff;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    #about-close svg { width: 22px; height: 22px; }
+
+    /* ─── History (for adults, behind "i") ─────────── */
+    #history-panel {
+      display: flex;
+      flex-direction: column;
+      width: 240px; height: 282px;
+      padding: 10px 12px;
+      gap: 6px;
+      color: var(--fur);
+    }
+    #history-title { font-size: 16px; text-align: center; }
+    #history-list {
+      flex: 1;
+      overflow-y: auto;
+      list-style: none;
+      font-size: 12px;
+      line-height: 1.35;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    #history-list li { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.15); }
+    #history-list .when { color: var(--lilac); font-size: 11px; }
+    #history-list .question { font-weight: bold; color: #fff; }
+    #history-list .answer { color: var(--fur); }
+    #history-empty { flex: 1; font-size: 13px; text-align: center; color: var(--lilac); }
+    #history-actions { display: flex; gap: 8px; }
+    #history-actions button {
+      flex: 1; height: 36px;
+      border: none;
+      border-radius: 18px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    #history-clear { background: transparent; border: 1.5px solid rgba(255,255,255,0.4) !important; }
+    #history-close { background: var(--pink); }
+
+    /* ─── Camera: full-screen preview, rabbit peeking ── */
+    #camera-panel {
+      position: relative;
+      width: 240px; height: 282px;
+      overflow: hidden;
+      background: #10132E;
+    }
+    #camera-preview {
+      position: absolute; inset: 0;
+      width: 240px; height: 282px;
+      object-fit: cover;
+    }
+    #camera-status {
+      position: absolute;
+      left: 62px; bottom: 92px;
+      width: max-content;
+      max-width: 150px;
+      padding: 5px 10px;
+      border-radius: 14px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+    #camera-status:empty { display: none; }
+    #camera-status::after {
+      content: "";
+      position: absolute;
+      left: 14px; bottom: -7px;
+      border: 7px solid transparent;
+      border-top-color: #fff;
+      border-bottom: 0;
+    }
+    .peek { position: absolute; left: 4px; bottom: -8px; width: 62px; height: 68px; pointer-events: none; }
+    #camera-cancel {
+      position: absolute;
+      top: 10px; left: 10px;
+      width: 40px; height: 40px;
+      display: grid; place-items: center;
+      border: none;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+    }
+    #camera-cancel svg { width: 20px; height: 20px; }
+    #camera-shoot {
+      position: absolute;
+      right: 14px; bottom: 14px;
+      width: 66px; height: 66px;
+      display: grid; place-items: center;
+      border: none;
+      border-radius: 50%;
+      background: #fff;
+      color: var(--teal);
+      box-shadow: 0 0 0 5px rgba(255,255,255,0.35);
+    }
+    #camera-shoot svg { width: 32px; height: 32px; }
+    #camera-actions button:disabled { opacity: 0.45; }
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    @keyframes breathe { from { transform: scale(0.94); } to { transform: scale(1.06); } }
+    @keyframes perk { from { transform: rotate(-2deg); } to { transform: rotate(2deg); } }
+    @keyframes talk { from { transform: scaleY(0.45); } to { transform: scaleY(1); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes dots {
+      0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; }
+    }
+    @keyframes flash {
+      0%   { opacity: 0; }
+      15%  { opacity: 0.85; }
+      100% { opacity: 0; }
+    }
+    .flash {
+      position: fixed; inset: 0;
+      background: #fff;
+      pointer-events: none;
+      z-index: 98;
+      animation: flash 0.35s ease-out forwards;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #app *, #app *::before, #app *::after { animation: none !important; }
+      .bunny { transition: none; }
+    }
+  </style>
+</head>
+<body>
+<div id="app" data-state="idle">
+
+  <button id="about-btn" type="button" aria-label="Sobre a app" aria-haspopup="dialog">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="6" r="1" fill="currentColor" stroke="none"/><path d="M12 11v8"/></svg>
+  </button>
+
+  <div id="bubble" aria-hidden="true"><span id="voice-label">Toca em mim!</span></div>
+
+  <button id="voice-btn" type="button" aria-label="Começar a gravar a pergunta" aria-pressed="false">
+    <svg class="bunny" viewBox="0 0 100 110" aria-hidden="true">
+      <g class="ears">
+        <ellipse cx="33" cy="26" rx="11" ry="26" fill="#F3EEFF"/><ellipse cx="33" cy="28" rx="5.5" ry="18" fill="#FF8FB8"/>
+        <ellipse cx="67" cy="26" rx="11" ry="26" fill="#F3EEFF"/><ellipse cx="67" cy="28" rx="5.5" ry="18" fill="#FF8FB8"/>
+      </g>
+      <ellipse cx="50" cy="72" rx="38" ry="34" fill="#F3EEFF"/>
+      <ellipse cx="30" cy="84" rx="7" ry="4.5" fill="#FFB3CF"/><ellipse cx="70" cy="84" rx="7" ry="4.5" fill="#FFB3CF"/>
+      <path d="M46 80h8l-4 4.5z" fill="#FF5A92"/>
+      <g class="face face-happy">
+        <circle cx="38" cy="66" r="5" fill="#1B1F45"/><circle cx="62" cy="66" r="5" fill="#1B1F45"/>
+        <circle cx="39.5" cy="64.5" r="1.6" fill="#fff"/><circle cx="63.5" cy="64.5" r="1.6" fill="#fff"/>
+        <path d="M44 89q6 5 12 0" fill="none" stroke="#1B1F45" stroke-width="2.4" stroke-linecap="round"/>
+      </g>
+      <g class="face face-listen">
+        <circle cx="38" cy="66" r="6.5" fill="#1B1F45"/><circle cx="62" cy="66" r="6.5" fill="#1B1F45"/>
+        <circle cx="40" cy="63.5" r="2" fill="#fff"/><circle cx="64" cy="63.5" r="2" fill="#fff"/>
+        <ellipse cx="50" cy="91" rx="3.5" ry="3" fill="#1B1F45"/>
+      </g>
+      <g class="face face-think">
+        <circle cx="41" cy="63" r="5" fill="#1B1F45"/><circle cx="65" cy="63" r="5" fill="#1B1F45"/>
+        <circle cx="43" cy="61" r="1.6" fill="#fff"/><circle cx="67" cy="61" r="1.6" fill="#fff"/>
+        <path d="M46 90h8" fill="none" stroke="#1B1F45" stroke-width="2.4" stroke-linecap="round"/>
+      </g>
+      <g class="face face-speak">
+        <path d="M32 66q6-6 12 0M56 66q6-6 12 0" fill="none" stroke="#1B1F45" stroke-width="3" stroke-linecap="round"/>
+        <g class="mouth-open"><ellipse cx="50" cy="91" rx="7" ry="6" fill="#1B1F45"/><ellipse cx="50" cy="94" rx="4" ry="2.4" fill="#FF5A92"/></g>
+      </g>
+      <g class="face face-oops">
+        <circle cx="38" cy="67" r="5" fill="#1B1F45"/><circle cx="62" cy="67" r="5" fill="#1B1F45"/>
+        <path d="M31 60l9-4M69 60l-9-4" fill="none" stroke="#1B1F45" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M44 92q6-5 12 0" fill="none" stroke="#1B1F45" stroke-width="2.4" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </button>
+
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <button id="replay-btn" type="button" aria-label="Ouvir outra vez" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>
+  </button>
+
+  <button id="camera-btn" type="button" aria-label="Tirar uma fotografia">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.5 9.6 3.6h4.8l1.4 1.9H19a2.5 2.5 0 0 1 2.5 2.5v9.5A2.5 2.5 0 0 1 19 20H5a2.5 2.5 0 0 1-2.5-2.5V8A2.5 2.5 0 0 1 5 5.5z" fill="currentColor"/><circle cx="12" cy="12.6" r="4.3" fill="none" stroke="#22B8C8" stroke-width="2.2"/></svg>
+  </button>
+
+</div>
+
+<section id="about-panel" hidden role="dialog" aria-modal="true" aria-labelledby="about-title">
+  <h1 id="about-title">Sobre</h1>
+  <p id="about-name">Explorador Curioso</p>
+  <p id="about-version"></p>
+  <p id="about-published"></p>
+  <p id="about-creator">Created by: <a href="https://whipit.gallivanter.biz/about/" referrerpolicy="no-referrer">João Carreiro</a></p>
+  <div id="age-row">
+    <button id="age-down" type="button" aria-label="Menos um ano">−</button>
+    <span id="age-value" aria-live="polite"></span>
+    <button id="age-up" type="button" aria-label="Mais um ano">+</button>
+  </div>
+  <button id="history-btn" class="panel-btn" type="button">Histórico</button>
+  <button id="about-close" type="button" aria-label="Voltar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg>
+    <span>Voltar</span>
+  </button>
+</section>
+
+<section id="history-panel" hidden role="dialog" aria-modal="true" aria-labelledby="history-title">
+  <h1 id="history-title">Histórico</h1>
+  <ol id="history-list"></ol>
+  <p id="history-empty" hidden>Ainda não há perguntas.</p>
+  <div id="history-actions">
+    <button id="history-clear" type="button">Apagar</button>
+    <button id="history-close" type="button">Voltar</button>
+  </div>
+</section>
+
+<section id="camera-panel" hidden aria-label="Câmara">
+  <video id="camera-preview" autoplay muted playsinline aria-label="Pré-visualização da câmara"></video>
+  <svg class="peek" viewBox="0 0 100 110" aria-hidden="true">
+    <ellipse cx="33" cy="26" rx="11" ry="26" fill="#F3EEFF"/><ellipse cx="33" cy="28" rx="5.5" ry="18" fill="#FF8FB8"/>
+    <ellipse cx="67" cy="26" rx="11" ry="26" fill="#F3EEFF"/><ellipse cx="67" cy="28" rx="5.5" ry="18" fill="#FF8FB8"/>
+    <ellipse cx="50" cy="72" rx="38" ry="34" fill="#F3EEFF"/>
+    <circle cx="38" cy="66" r="6" fill="#1B1F45"/><circle cx="62" cy="66" r="6" fill="#1B1F45"/>
+    <path d="M46 80h8l-4 4.5z" fill="#FF5A92"/>
+  </svg>
+  <p id="camera-status" role="status" aria-live="polite">A abrir a câmara...</p>
+  <div id="camera-actions">
+    <button id="camera-cancel" type="button" aria-label="Cancelar fotografia">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="m8 8 16 16M24 8 8 24"/></svg>
+      <span class="sr-only">Cancelar</span>
+    </button>
+    <button id="camera-shoot" type="button" aria-label="Tirar fotografia agora" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.5 9.6 3.6h4.8l1.4 1.9H19a2.5 2.5 0 0 1 2.5 2.5v9.5A2.5 2.5 0 0 1 19 20H5a2.5 2.5 0 0 1-2.5-2.5V8A2.5 2.5 0 0 1 5 5.5z" fill="currentColor"/><circle cx="12" cy="12.6" r="4.3" fill="none" stroke="#fff" stroke-width="2.2"/></svg>
+      <span class="sr-only">FOTO</span>
+    </button>
+  </div>
+</section>
+
+<!-- File-picker fallback for browsers without live camera capture. -->
+<input type="file" id="cam-input" accept="image/*" capture="environment" style="display:none" />
+
+<!-- The prompt and answer rules, shared with the backend (window.KidsContract). -->
+<script src="child-contract.js"></script>
+<script>
+'use strict';
+
+// Identifies the actual loaded page, independently of the installation URL.
+// Update both values whenever publishing a new Creation release.
+const APP_RELEASE = Object.freeze({
+  version: '2026.10.12.1',
+  published: '12 de outubro de 2026',
+});
+
+// ─── Two ways to answer ───────────────────────────────────────────────────────
+// 1. A private backend (installation QR with #device=<token>). The client is
+//    thin: no provider keys, no model choice — capture, upload and speak.
+//    Which AI providers answer is backend configuration.
+// 2. The family's own keys (installation QR with #openai=<key>, optionally
+//    &azure=<key>&region=<region>), made by the install page. No backend is
+//    involved: this page asks OpenAI directly with the shared prompt from
+//    child-contract.js and, with an Azure key, renders the Portugal voice.
+//    The keys stay on this device and are only sent to OpenAI and Azure.
+//
+// Backend contract:
+//
+//   POST {BACKEND_URL}/api/ask      multipart/form-data
+//     audio    — recorded voice clip, plus duration (its length in seconds)
+//     image    — captured photo
+//     question — optional short text accompanying an image
+//
+//   200        → { "topic": string, "answer": string, "followups": string[],
+//                  "audio"?: { "mimeType": "audio/mpeg", "base64": string } }
+//   4xx / 5xx  → { "error": { "code": string, "message": string } }
+//
+// Voice and photo share this single query operation. Set BACKEND_URL to the
+// base URL of the private backend when this page is hosted on another origin
+// (allow that origin explicitly in the backend). Only the device credential
+// belongs here; AI provider credentials always remain on the server.
+// Leave it empty only when this page is served from the same origin as the
+// backend, e.g. behind one reverse proxy.
+const BACKEND_URL = '';
+const QUERY_PATH = '/api/ask';
+const DEVICE_TOKEN_STORAGE_KEY = 'kids-explorer-device-token';
+const DEVICE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,256}$/;
+const OWN_KEYS_STORAGE_KEY = 'kids-explorer-own-keys';
+const OPENAI_KEY_PATTERN = /^sk-[A-Za-z0-9_-]{20,300}$/;
+const AZURE_KEY_PATTERN = /^[A-Za-z0-9]{32,128}$/;
+const AZURE_REGION_PATTERN = /^[a-z0-9]{2,40}$/;
+let deviceToken = '';
+let ownKeys = null;
+let deviceTokenLoaded = false;
+const deviceTokenReady = loadCredentials().then((credentials) => {
+  deviceToken = credentials.deviceToken;
+  ownKeys = credentials.ownKeys;
+  deviceTokenLoaded = true;
+});
+
+// The installation QR supplies the credential in the URL fragment, which is
+// never sent in HTTP requests. It is kept across launches in the R1's
+// hardware-encrypted creation storage. The device token falls back to
+// localStorage where that is missing (phone fallback), and to memory without
+// either. Provider keys are never written to localStorage: without creation
+// storage they live in memory for that visit only. A new QR replaces whatever
+// was stored before.
+async function loadCredentials() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const device = params.get('device');
+  const supplied = readOwnKeys(params.get('openai'), params.get('azure'), params.get('region'));
+  if (supplied || (device && DEVICE_TOKEN_PATTERN.test(device))) {
+    try { window.history.replaceState(null, '', window.location.pathname + window.location.search); } catch (_) {}
+  }
+  if (supplied) {
+    await saveOwnKeys(supplied);
+    await removeSecret(DEVICE_TOKEN_STORAGE_KEY);
+    return { deviceToken: '', ownKeys: supplied };
+  }
+  if (device && DEVICE_TOKEN_PATTERN.test(device)) {
+    await saveDeviceToken(device);
+    await removeSecret(OWN_KEYS_STORAGE_KEY);
+    return { deviceToken: device, ownKeys: null };
+  }
+  const storedKeys = await readStoredOwnKeys();
+  if (storedKeys) return { deviceToken: '', ownKeys: storedKeys };
+  return { deviceToken: await readStoredDeviceToken(), ownKeys: null };
+}
+
+// An Azure key without a region (or the reverse) is ignored: answers then
+// use the device voice.
+function readOwnKeys(openai, azure, region) {
+  if (!openai || !OPENAI_KEY_PATTERN.test(openai)) return null;
+  const keys = { openai };
+  if (azure && AZURE_KEY_PATTERN.test(azure) && region && AZURE_REGION_PATTERN.test(region)) {
+    keys.azure = azure;
+    keys.region = region;
+  }
+  return keys;
+}
+
+async function saveOwnKeys(keys) {
+  const secure = secureStorage();
+  if (!secure) return;
+  try { await secure.setItem(OWN_KEYS_STORAGE_KEY, btoa(JSON.stringify(keys))); } catch (_) {}
+}
+
+async function readStoredOwnKeys() {
+  const secure = secureStorage();
+  if (!secure) return null;
+  try {
+    const raw = await secure.getItem(OWN_KEYS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(atob(raw));
+    return readOwnKeys(parsed.openai, parsed.azure, parsed.region);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function removeSecret(key) {
+  const secure = secureStorage();
+  if (secure && typeof secure.removeItem === 'function') {
+    try { await secure.removeItem(key); } catch (_) {}
+  }
+  try { window.localStorage.removeItem(key); } catch (_) {}
+}
+
+function secureStorage() {
+  const storage = window.creationStorage;
+  return storage && storage.secure ? storage.secure : null;
+}
+
+async function saveDeviceToken(token) {
+  const secure = secureStorage();
+  if (secure) {
+    try {
+      await secure.setItem(DEVICE_TOKEN_STORAGE_KEY, btoa(token)); // creationStorage requires Base64
+      try { window.localStorage.removeItem(DEVICE_TOKEN_STORAGE_KEY); } catch (_) {}
+      return;
+    } catch (_) {}
+  }
+  try { window.localStorage.setItem(DEVICE_TOKEN_STORAGE_KEY, token); } catch (_) {}
+}
+
+async function readStoredDeviceToken() {
+  const secure = secureStorage();
+  if (secure) {
+    try {
+      const raw = await secure.getItem(DEVICE_TOKEN_STORAGE_KEY);
+      const token = raw ? atob(raw) : '';
+      if (DEVICE_TOKEN_PATTERN.test(token)) return token;
+    } catch (_) {}
+  }
+  let token = '';
+  try { token = window.localStorage.getItem(DEVICE_TOKEN_STORAGE_KEY) || ''; } catch (_) {}
+  if (!DEVICE_TOKEN_PATTERN.test(token)) return '';
+  if (secure) await saveDeviceToken(token); // move an older plaintext copy into secure storage
+  return token;
+}
+
+// Synchronous so capture still starts inside the user gesture; the token
+// finishes loading at startup, long before the first press.
+function hasDeviceAccess() {
+  if (deviceToken || ownKeys) return true;
+  fail(deviceTokenLoaded
+    ? 'Pede a um adulto para instalar o Explorador com o QR novo.'
+    : 'Um momento... tenta outra vez!', deviceTokenLoaded);
+  return false;
+}
+
+// ─── Capture and request limits (mirrored by the backend) ────────────────────
+const MAX_RECORD_MS = 15000;
+// A question stops by itself just before 15 s; the backend accepts longer clips.
+const AUTO_STOP_MS = MAX_RECORD_MS - 500;
+const MIN_RECORD_MS = 300;
+const MICROPHONE_TIMEOUT_MS = 10000;
+const CAMERA_TIMEOUT_MS = 10000;
+const NATIVE_TRANSCRIPT_TIMEOUT_MS = 15000;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+// Photos are re-encoded to a JPEG no larger than this on the longest side:
+// small uploads are faster and fit every vision provider's image limits.
+const PHOTO_MAX_SIDE = 1024;
+const PHOTO_JPEG_QUALITY = 0.82;
+// What the backend accepts when a photo cannot be re-encoded here.
+const UPLOADABLE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const REQUEST_TIMEOUT_MS = 60000;
+
+// ─── Conversation, history and adult settings ─────────────────────────────────
+// The last few turns travel with each question so «sim» or «e porquê?» make
+// sense. A pause longer than CONVERSATION_MS starts a new conversation.
+const CONVERSATION_MS = 5 * 60 * 1000;
+const MAX_CONTEXT_TURNS = 6;
+// What the adult sees under "i" > Histórico, newest first, kept on the device.
+const MAX_HISTORY = 30;
+const HISTORY_STORAGE_KEY = 'kids-explorer-history';
+const PREFERENCES_WAIT_MS = 1500;
+const AGE_STORAGE_KEY = 'kids-explorer-age';
+const DEFAULT_AGE = 5;
+const MIN_AGE = 3;
+const MAX_AGE = 12;
+// One error phrase in the Portugal voice, rendered by the backend.
+const OOPS_AUDIO_PATH = '/oops.mp3';
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let isBusy = false;
+let isRecording = false;
+let isStartingVoice = false;
+let stopRequested = false;
+let recorder = null;
+let mediaStream = null;
+let recordChunks = [];
+let recordStartedAt = 0;
+let recordTimer = null;
+let captureGeneration = 0;
+let speechGeneration = 0;
+let nativeCapture = null;
+let nativeResultTimer = null;
+let cameraStream = null;
+let cameraGeneration = 0;
+let cameraTimer = null;
+let isCameraOpen = false;
+let queryGeneration = 0;
+let activeQuery = null;
+let conversation = [];
+let lastTurnAt = 0;
+let lastAnswer = null;
+let replayTimer = null;
+let childAge = DEFAULT_AGE;
+let history = [];
+let isHistoryOpen = false;
+// Until the saved settings and history are loaded, nothing is written back:
+// loadPreferences merges what changed meanwhile and saves the result once.
+let preferencesLoaded = false;
+let ageChangedBeforeLoad = false;
+let historyClearedBeforeLoad = false;
+let preferencesLoading = null;
+let clearArmedTimer = null;
+
+// ─── DOM ──────────────────────────────────────────────────────────────────────
+const voiceBtn    = document.getElementById('voice-btn');
+const cameraBtn   = document.getElementById('camera-btn');
+const camInput    = document.getElementById('cam-input');
+const appEl       = document.getElementById('app');
+const voiceLabel  = document.getElementById('voice-label');
+const statusEl    = document.getElementById('status');
+const aboutBtn    = document.getElementById('about-btn');
+const aboutPanel  = document.getElementById('about-panel');
+const aboutClose  = document.getElementById('about-close');
+const cameraPanel = document.getElementById('camera-panel');
+const cameraVideo = document.getElementById('camera-preview');
+const cameraStatus = document.getElementById('camera-status');
+const cameraCancel = document.getElementById('camera-cancel');
+const cameraShoot = document.getElementById('camera-shoot');
+const replayBtn   = document.getElementById('replay-btn');
+const ageDown     = document.getElementById('age-down');
+const ageUp       = document.getElementById('age-up');
+const ageValue    = document.getElementById('age-value');
+const historyBtn  = document.getElementById('history-btn');
+const historyPanel = document.getElementById('history-panel');
+const historyList = document.getElementById('history-list');
+const historyEmpty = document.getElementById('history-empty');
+const historyClear = document.getElementById('history-clear');
+const historyClose = document.getElementById('history-close');
+document.getElementById('about-version').textContent = 'v' + APP_RELEASE.version;
+document.getElementById('about-published').textContent = 'Publicado em ' + APP_RELEASE.published;
+let uiState = 'idle';
+let isAboutOpen = false;
+
+// ─── R1 Plugin API ────────────────────────────────────────────────────────────
+// Speak through R1-native TTS or, outside the R1, through the browser's speech
+// synthesis. wantsR1Response is what makes the R1 use its speaker; useLLM=false
+// asks it to read the text as-is instead of sending it to the Rabbit LLM.
+function speak(text, onEnd) {
+  // Prefer a verified Portugal voice on the device. The Rabbit bridge uses
+  // the device's configured voice and does not expose a documented locale flag.
+  const portugalVoice = browserPortugalVoice();
+  if (portugalVoice) {
+    browserSpeak(text, onEnd, portugalVoice);
+    return;
+  }
+  const bridge = typeof PluginMessageHandler !== 'undefined'
+    ? PluginMessageHandler : window.PluginMessageHandler;
+  if (bridge && typeof bridge.postMessage === 'function') {
+    const generation = ++speechGeneration;
+    bridge.postMessage(JSON.stringify({
+      message: text,
+      useLLM: false,
+      wantsR1Response: true,
+      wantsJournalEntry: false,
+    }));
+    // The R1 bridge reports no completion; leave "speaking" after an estimate.
+    if (onEnd) endSpeechAfter(generation, estimatedSpeechMs(text), onEnd);
+  } else {
+    browserSpeak(text, onEnd);
+  }
+}
+
+// A speaking state that never ends keeps the rabbit animating on screen.
+// Every speech path therefore finishes within a bounded time.
+let speechEndTimer = null;
+function estimatedSpeechMs(text) {
+  return Math.max(2500, String(text).length * 75);
+}
+
+function endSpeechAfter(generation, ms, onEnd) {
+  clearTimeout(speechEndTimer);
+  speechEndTimer = setTimeout(() => {
+    speechEndTimer = null;
+    if (generation === speechGeneration && onEnd) onEnd();
+  }, ms);
+}
+
+function browserPortugalVoice() {
+  if (!('speechSynthesis' in window)) return null;
+  return window.speechSynthesis.getVoices().find(voice =>
+    String(voice.lang || '').replace('_', '-').toLowerCase() === 'pt-pt') || null;
+}
+
+function browserSpeak(text, onEnd, portugalVoice = browserPortugalVoice()) {
+  if (!('speechSynthesis' in window)) {
+    setUI('error', 'Áudio indisponível neste aparelho.');
+    return;
+  }
+  if (!portugalVoice) {
+    setUI('error', 'Voz de Portugal indisponível neste aparelho.');
+    return;
+  }
+  const generation = ++speechGeneration;
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'pt-PT';
+  u.rate = 0.88;
+  u.pitch = 1.1;
+  u.voice = portugalVoice;
+  u.onend = () => { if (generation === speechGeneration && onEnd) onEnd(); };
+  u.onerror = (event) => {
+    if (generation === speechGeneration && event.error !== 'interrupted' && event.error !== 'canceled') {
+      setUI('error', 'Não consegui falar. Tenta de novo.');
+    }
+  };
+  synth.speak(u);
+}
+
+// When the backend rendered the answer with a Portugal voice, play that
+// audio; if this WebView cannot play it, speak the same text with the device.
+let answerPlayer = null;
+function speakAnswer(text, audio, onEnd) {
+  playVoice(text, audio ? 'data:' + audio.mimeType + ';base64,' + audio.base64 : null, onEnd);
+}
+
+// Plays recorded speech from `src`, falling back to the device voice for `text`.
+function playVoice(text, src, onEnd) {
+  const AudioPlayer = typeof Audio === 'function' ? Audio : window.Audio;
+  if (!src || typeof AudioPlayer !== 'function') {
+    speak(text, onEnd);
+    return;
+  }
+  const generation = ++speechGeneration;
+  let settled = false;
+  let player = null;
+  let playing = false;
+  const fallback = () => {
+    if (settled || generation !== speechGeneration) return;
+    settled = true;
+    clearTimeout(speechEndTimer);
+    speechEndTimer = null;
+    answerPlayer = null;
+    if (player) { try { player.pause(); } catch (_) {} }
+    speak(text, onEnd);
+  };
+  try {
+    player = new AudioPlayer(src);
+    answerPlayer = player;
+    const finish = () => {
+      if (settled || generation !== speechGeneration) return;
+      settled = true;
+      clearTimeout(speechEndTimer);
+      speechEndTimer = null;
+      answerPlayer = null;
+      if (onEnd) onEnd();
+    };
+    player.onended = finish;
+    // Some WebViews never fire "ended" for data: audio; do not stay "speaking".
+    // Audio that never started (a stalled download) is spoken by the device.
+    speechEndTimer = setTimeout(() => (playing ? finish() : fallback()), estimatedSpeechMs(text) + 4000);
+    player.onerror = fallback;
+    const started = player.play();
+    if (started && typeof started.then === 'function') started.then(() => { playing = true; }, fallback);
+    else playing = true;
+  } catch (_) {
+    fallback();
+  }
+}
+
+function stopSpeaking() {
+  speechGeneration++;
+  clearTimeout(speechEndTimer);
+  speechEndTimer = null;
+  if (answerPlayer) {
+    try { answerPlayer.pause(); } catch (_) {}
+    answerPlayer = null;
+  }
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+}
+
+// ─── Backend query (single operation for voice and photo) ─────────────────────
+function backendUrl(path) {
+  const base = BACKEND_URL ? BACKEND_URL.replace(/\/+$/, '') : '';
+  return base + path;
+}
+
+async function runQuery(parts) {
+  if (!hasDeviceAccess()) return;
+  // A newer query or leaving the page makes this one's late result irrelevant.
+  const generation = ++queryGeneration;
+  isBusy = true;
+  showLoading();
+  // The saved age may still be loading on a slow R1; wait for it, briefly.
+  if (!preferencesLoaded && preferencesLoading) {
+    await Promise.race([preferencesLoading, new Promise(resolve => setTimeout(resolve, PREFERENCES_WAIT_MS))]);
+    if (generation !== queryGeneration) return;
+  }
+  const context = recentConversation();
+  const controller = new AbortController();
+  activeQuery = controller;
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const result = ownKeys
+      ? await askOpenAI(parts, context, controller.signal)
+      : await askBackend(parts, context, controller.signal);
+    if (generation !== queryGeneration) return;
+
+    if (!result.ok) {
+      const adultHelp = ['provider_billing_inactive', 'provider_quota_exceeded',
+        'provider_auth_missing', 'provider_auth_rejected', 'device_auth_required',
+        'device_transcription_required'].includes(result.data?.error?.code);
+      fail(serverErrorMessage(result.data) || 'Não consegui responder. Tenta outra vez!', adultHelp);
+      return;
+    }
+
+    const parsed = parseResponse(result.data);
+    if (!parsed) {
+      fail('O servidor respondeu mal. Tenta outra vez!');
+      return;
+    }
+    renderResponse(parsed, parsed.question || parts.question);
+  } catch (err) {
+    if (generation !== queryGeneration) return;
+    if (err && err.name === 'AbortError') {
+      fail('O servidor está demorado. Tenta outra vez!');
+    } else {
+      fail('Não consegui falar com o servidor. Tenta outra vez!');
+    }
+  } finally {
+    clearTimeout(timer);
+    if (activeQuery === controller) activeQuery = null;
+  }
+}
+
+async function askBackend(parts, context, signal) {
+  const body = new FormData();
+  body.append('age', String(childAge));
+  if (context.length) body.append('context', JSON.stringify(context));
+  if (parts.audioBlob) {
+    body.append('duration', String(parts.durationSeconds));
+    body.append('audio', parts.audioBlob, parts.audioName);
+  }
+  if (parts.imageBlob) body.append('image', parts.imageBlob, parts.imageName);
+  if (parts.question) body.append('question', parts.question);
+
+  const res = await fetch(backendUrl(QUERY_PATH), {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + deviceToken },
+    body,
+    signal,
+  });
+  let data = null;
+  try { data = await res.json(); } catch (_) { data = null; }
+  return { ok: res.ok, data };
+}
+
+// ─── The family's own keys: OpenAI answers, optional Azure voice ──────────────
+// Mirrors the backend pipeline (voice -> transcript -> answer -> speech) so a
+// QR from the install page needs no server at all.
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const OPENAI_ANSWER_MODEL = 'gpt-5.6-luna';
+const OPENAI_TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe';
+const AZURE_VOICE = 'pt-PT-RaquelNeural';
+const AZURE_RATE = '-10%';
+const AZURE_SPEECH_TIMEOUT_MS = 8000;
+
+const OWN_KEY_ERRORS = {
+  provider_auth_rejected: 'A chave da OpenAI foi recusada. Um adulto tem de criar um QR novo.',
+  provider_quota_exceeded: 'A conta da OpenAI não tem saldo ou chegou ao limite. Um adulto tem de a verificar.',
+  understand_failed: 'Não consegui responder. Tenta outra vez!',
+  transcription_empty: 'Não percebi a pergunta. Tenta outra vez!',
+};
+
+function ownKeyError(code) {
+  return { ok: false, data: { error: { code, message: OWN_KEY_ERRORS[code] } } };
+}
+
+// 401/403: wrong or revoked key. 429: no credit or rate limited; both need
+// an adult. Anything else is worth a retry.
+function openAIErrorCode(status) {
+  if (status === 401 || status === 403) return 'provider_auth_rejected';
+  if (status === 429) return 'provider_quota_exceeded';
+  return 'understand_failed';
+}
+
+async function askOpenAI(parts, context, signal) {
+  const Contract = window.KidsContract;
+  if (!Contract) return ownKeyError('understand_failed');
+  const headers = { authorization: 'Bearer ' + ownKeys.openai };
+
+  // The backend's question limit, so a long native transcript is cut at a
+  // word as it would be there, and history and context get the same text.
+  const maxQuestion = Contract.DEFAULT_LIMITS.maxQuestionChars;
+  let question = Contract.truncateSpoken(parts.question || '', maxQuestion);
+  if (parts.audioBlob) {
+    const form = new FormData();
+    form.append('file', parts.audioBlob, parts.audioName);
+    form.append('model', OPENAI_TRANSCRIBE_MODEL);
+    form.append('language', 'pt');
+    const res = await fetch(OPENAI_BASE_URL + '/audio/transcriptions', { method: 'POST', headers, body: form, signal });
+    if (!res.ok) return ownKeyError(openAIErrorCode(res.status));
+    const data = await res.json().catch(() => null);
+    question = data && typeof data.text === 'string' ? data.text.trim() : '';
+    if (!question) return ownKeyError('transcription_empty');
+    question = Contract.truncateSpoken(question, maxQuestion);
+  }
+
+  const content = [];
+  if (parts.imageBlob) content.push({ type: 'input_image', image_url: await blobDataUrl(parts.imageBlob) });
+  const text = Contract.withConversation(question || null, context);
+  if (text) content.push({ type: 'input_text', text });
+
+  const res = await fetch(OPENAI_BASE_URL + '/responses', {
+    method: 'POST',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: OPENAI_ANSWER_MODEL,
+      instructions: Contract.childInstructions(childAge),
+      input: [{ role: 'user', content }],
+      reasoning: { effort: 'low' },
+      store: false,
+    }),
+    signal,
+  });
+  if (!res.ok) return ownKeyError(openAIErrorCode(res.status));
+  const child = Contract.parseChildResponse(responsesText(await res.json().catch(() => null)));
+  if (!child) return { ok: true, data: null }; // reported as a bad answer
+  const audio = ownKeys.azure ? await azureSpeech(Contract.spokenText(child), signal) : null;
+  return { ok: true, data: { ...child, ...(audio ? { audio } : {}), question } };
+}
+
+function responsesText(data) {
+  if (!data) return '';
+  if (typeof data.output_text === 'string') return data.output_text;
+  const texts = [];
+  for (const item of Array.isArray(data.output) ? data.output : []) {
+    for (const part of Array.isArray(item && item.content) ? item.content : []) {
+      if (part && part.type === 'output_text' && typeof part.text === 'string') texts.push(part.text);
+    }
+  }
+  return texts.join('\n');
+}
+
+function blobDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Speech is an enhancement: any failure returns null and the device voice
+// reads the answer instead.
+async function azureSpeech(text, signal) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal.addEventListener('abort', abort);
+  const timer = setTimeout(abort, AZURE_SPEECH_TIMEOUT_MS);
+  try {
+    const escaped = String(text).replace(/[<>&'"]/g, ch => (
+      { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[ch]
+    ));
+    const res = await fetch('https://' + ownKeys.region + '.tts.speech.microsoft.com/cognitiveservices/v1', {
+      method: 'POST',
+      headers: {
+        'ocp-apim-subscription-key': ownKeys.azure,
+        'content-type': 'application/ssml+xml',
+        'x-microsoft-outputformat': 'audio-24khz-48kbitrate-mono-mp3',
+      },
+      body: '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-PT">'
+        + '<voice name="' + AZURE_VOICE + '"><prosody rate="' + AZURE_RATE + '">' + escaped + '</prosody></voice></speak>',
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const dataUrl = await blobDataUrl(await res.blob());
+    const base64 = String(dataUrl).split(',')[1] || '';
+    return base64 ? { mimeType: 'audio/mpeg', base64 } : null;
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', abort);
+  }
+}
+
+// The backend reports failures as { error: { code, message } }; surface its
+// child-friendly message when present so the R1 speaks the real reason.
+function serverErrorMessage(data) {
+  if (!data || typeof data !== 'object') return '';
+  const err = data.error;
+  if (typeof err === 'string' && err.trim()) return err.trim();
+  if (err && typeof err === 'object' && typeof err.message === 'string' && err.message.trim()) {
+    return err.message.trim();
+  }
+  return '';
+}
+
+// Enforce the child-response contract client-side: anything that does not
+// match {topic, answer, followups} is an explicit failure, never a guess.
+function parseResponse(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const topic = typeof data.topic === 'string' ? data.topic.trim() : '';
+  const answer = typeof data.answer === 'string' ? data.answer.trim() : '';
+  if (!topic || !answer) return null;
+  const followups = Array.isArray(data.followups)
+    ? data.followups
+        .filter(f => typeof f === 'string' && f.trim())
+        .slice(0, 2)
+        .map(f => f.trim())
+    : [];
+  const audio = data.audio && data.audio.mimeType === 'audio/mpeg'
+    && typeof data.audio.base64 === 'string' && /^[A-Za-z0-9+/]+=*$/.test(data.audio.base64)
+    ? { mimeType: data.audio.mimeType, base64: data.audio.base64 }
+    : null;
+  // The transcript of an uploaded voice clip, for history and context.
+  const question = typeof data.question === 'string' ? data.question.trim() : '';
+  return { topic, answer, followups, audio, question };
+}
+
+// The answer, topic and follow-ups never enter the child's screen; both voice
+// and photo answers are delivered as audio. Only the adult history under "i"
+// shows them, and only while it is open.
+function renderResponse({ answer, followups, audio }, question) {
+  rememberTurn(question || '', answer, followups, audio);
+  isBusy = false;
+  setUI('speaking', '');
+  speakAnswer(spokenText(answer, followups), audio, () => {
+    if (uiState === 'speaking') setUI('idle', '');
+  });
+}
+
+// The backend speaks the same phrase when it renders the answer audio.
+function spokenText(answer, followups) {
+  if (!followups.length) return answer;
+  return answer + ' Queres saber mais sobre ' + followups.join(' ou sobre ') + '?';
+}
+
+function recentConversation() {
+  if (Date.now() - lastTurnAt > CONVERSATION_MS) conversation = [];
+  return conversation;
+}
+
+function rememberTurn(question, answer, followups, audio) {
+  const now = Date.now();
+  conversation = recentConversation().concat({ question, answer, followups }).slice(-MAX_CONTEXT_TURNS);
+  lastTurnAt = now;
+  lastAnswer = { text: spokenText(answer, followups), audio };
+  clearTimeout(replayTimer);
+  replayTimer = setTimeout(() => {
+    replayTimer = null;
+    lastAnswer = null;
+    updateReplay();
+  }, CONVERSATION_MS);
+  history = [{ at: now, question, answer }].concat(history).slice(0, MAX_HISTORY);
+  if (preferencesLoaded) saveHistory();
+}
+
+// Hear the last answer again, without asking the backend.
+function replayAnswer() {
+  if (!lastAnswer || isBusy || isRecording || isStartingVoice || isAboutOpen) return;
+  stopSpeaking();
+  setUI('speaking', '');
+  speakAnswer(lastAnswer.text, lastAnswer.audio, () => {
+    if (uiState === 'speaking') setUI('idle', '');
+  });
+}
+
+function updateReplay() {
+  const busy = uiState === 'starting' || uiState === 'listening' || uiState === 'thinking';
+  replayBtn.hidden = !lastAnswer || busy;
+}
+
+// ─── Explicit failure (never pretend understanding succeeded) ─────────────────
+// The child hears one recorded phrase in the Portugal voice; messages meant
+// for an adult keep their detail and use the device voice.
+function fail(message, adultHelp = false) {
+  isBusy = false;
+  isStartingVoice = false;
+  setUI(adultHelp ? 'unavailable' : 'error', adultHelp ? 'Pede ajuda a um adulto.' : 'Tenta outra vez!');
+  if (adultHelp) speak(message);
+  else playVoice(message, ownKeys ? null : backendUrl(OOPS_AUDIO_PATH));
+}
+
+// Two short tones that tell a child who cannot read yet that the rabbit is
+// listening ("open") or has the question ("send"). Silent where unsupported.
+let chimeContext = null;
+function chime(kind) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    chimeContext = chimeContext || new AudioCtx();
+    const start = chimeContext.currentTime;
+    (kind === 'open' ? [660, 990] : [880, 587]).forEach((frequency, i) => {
+      const osc = chimeContext.createOscillator();
+      const gain = chimeContext.createGain();
+      const at = start + i * 0.11;
+      osc.type = 'sine';
+      osc.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.25, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+      osc.connect(gain);
+      gain.connect(chimeContext.destination);
+      osc.start(at);
+      osc.stop(at + 0.18);
+    });
+  } catch (_) {}
+}
+
+// A screen tap starts capture and a second tap sends it. Hardware PTT still
+// records while held. One click handler works with touch, mouse and keyboard,
+// avoiding duplicate touch/mouse starts and short taps cancelling permission.
+function toggleVoice() {
+  if (isRecording || isStartingVoice) stopVoice();
+  else if (!isBusy) return startVoice();
+}
+
+async function startVoice() {
+  if (isAboutOpen || isBusy || isRecording) return;
+  if (!hasDeviceAccess()) return;
+  const generation = ++captureGeneration;
+  isBusy = true;
+  isStartingVoice = true;
+  stopRequested = false;
+  stopSpeaking();
+  setUI('starting', '');
+
+  // On the R1, claiming CreationVoiceHandler routes PTT speech back into this
+  // Creation as a transcript. the backend generates the answer; Rabbit's LLM
+  // is never requested. Other browsers keep the audio-upload provider path.
+  const voiceBridge = nativeVoiceBridge();
+  if (voiceBridge) {
+    nativeCapture = { bridge: voiceBridge, generation, stopping: false };
+    isStartingVoice = false;
+    isRecording = true;
+    setUI('listening', 'Toca para enviar.');
+    chime('open');
+    try {
+      recordTimer = setTimeout(stopVoice, AUTO_STOP_MS);
+      voiceBridge.postMessage('start');
+    } catch (_) {
+      cleanupNativeVoice(true);
+      fail('Não consegui abrir o microfone. Tenta outra vez!');
+    }
+    return;
+  }
+
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia ||
+      typeof MediaRecorder === 'undefined') {
+    fail('Não consigo gravar voz neste aparelho.');
+    return;
+  }
+
+  try {
+    const stream = await acquireMicrophone();
+    if (generation !== captureGeneration) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+    mediaStream = stream;
+    isStartingVoice = false;
+  } catch (err) {
+    if (generation !== captureGeneration) return;
+    const denied = err && err.name === 'NotAllowedError';
+    fail(denied
+      ? 'O microfone precisa de permissão. Pede ajuda a um adulto.'
+      : 'Não consegui abrir o microfone. Tenta outra vez!', denied);
+    return;
+  }
+
+  if (stopRequested) {
+    releaseStream();
+    isBusy = false;
+    setUI('idle', '');
+    return;
+  }
+
+  recordChunks = [];
+  try {
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+      .find(type => typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type));
+    recorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
+  } catch (_) {
+    releaseStream();
+    fail('Não consigo gravar voz neste aparelho.');
+    return;
+  }
+  recorder.ondataavailable = (e) => {
+    if (e.data && e.data.size) recordChunks.push(e.data);
+  };
+  recorder.onstop = finishRecording;
+  recorder.onerror = () => {
+    cleanupRecording();
+    fail('A gravação falhou. Tenta outra vez!');
+  };
+
+  try {
+    recorder.start();
+  } catch (_) {
+    cleanupRecording();
+    fail('A gravação falhou. Tenta outra vez!');
+    return;
+  }
+  recordStartedAt = Date.now();
+  isRecording = true;
+  setUI('listening', 'Toca para enviar.');
+  chime('open');
+  recordTimer = setTimeout(stopVoice, AUTO_STOP_MS);
+}
+
+function stopVoice() {
+  stopRequested = true;
+  if (nativeCapture) {
+    if (nativeCapture.stopping) return;
+    nativeCapture.stopping = true;
+    isRecording = false;
+    clearTimeout(recordTimer);
+    recordTimer = null;
+    setUI('thinking', '');
+    chime('send');
+    nativeResultTimer = setTimeout(() => {
+      cleanupNativeVoice();
+      fail('Não recebi a pergunta. Tenta outra vez!');
+    }, NATIVE_TRANSCRIPT_TIMEOUT_MS);
+    try { nativeCapture.bridge.postMessage('stop'); } catch (_) {
+      cleanupNativeVoice();
+      fail('A gravação falhou. Tenta outra vez!');
+    }
+  } else if (isRecording && recorder && recorder.state !== 'inactive') {
+    setUI('thinking', '');
+    chime('send');
+    try { recorder.stop(); } catch (_) {
+      cleanupRecording();
+      fail('A gravação falhou. Tenta outra vez!');
+    }
+  } else if (isStartingVoice) {
+    setUI('starting', '');
+  }
+}
+
+function nativeVoiceBridge() {
+  const bridge = typeof CreationVoiceHandler !== 'undefined'
+    ? CreationVoiceHandler : window.CreationVoiceHandler;
+  return bridge && typeof bridge.postMessage === 'function' ? bridge : null;
+}
+
+function cleanupNativeVoice(stop = false) {
+  const capture = nativeCapture;
+  nativeCapture = null; // clear before stop: a bridge may callback synchronously
+  clearTimeout(nativeResultTimer);
+  nativeResultTimer = null;
+  clearTimeout(recordTimer);
+  recordTimer = null;
+  isRecording = false;
+  isStartingVoice = false;
+  if (stop && capture && !capture.stopping) {
+    try { capture.bridge.postMessage('stop'); } catch (_) {}
+  }
+}
+
+window.onPluginMessage = function(data) {
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data); } catch (_) { return; }
+  }
+  if (!data || data.type !== 'sttEnded' || !nativeCapture || !nativeCapture.stopping ||
+      nativeCapture.generation !== captureGeneration) return;
+  cleanupNativeVoice();
+  const transcript = typeof data.transcript === 'string' ? data.transcript.trim() : '';
+  if (!transcript) {
+    fail('Não ouvi bem. Faz a pergunta e tenta outra vez!');
+    return;
+  }
+  // Never display the transcript or send it through PluginMessageHandler.
+  // This authenticated text request uses the same child prompt as uploaded audio.
+  runQuery({ question: transcript });
+};
+
+// A WebView that never resolves microphone permission must not leave the
+// button frozen. If permission arrives after the deadline, release the mic.
+function acquireMicrophone() {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      reject(new Error('Microphone timeout'));
+    }, MICROPHONE_TIMEOUT_MS);
+    let permission;
+    try { permission = navigator.mediaDevices.getUserMedia({ audio: true }); } catch (err) {
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+      return;
+    }
+    permission.then(stream => {
+      if (settled) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      resolve(stream);
+    }, err => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+function finishRecording() {
+  const elapsed = Date.now() - recordStartedAt;
+  const mimeType = (recorder && recorder.mimeType) || 'audio/webm';
+  cleanupRecording();
+
+  if (elapsed < MIN_RECORD_MS) {
+    recordChunks = [];
+    fail('Não deu tempo de ouvir. Toca no botão, faz a pergunta e toca outra vez para enviar.');
+    return;
+  }
+
+  const blob = new Blob(recordChunks, { type: mimeType });
+  recordChunks = [];
+  if (!blob.size) {
+    fail('Não ouvi nada. Tenta outra vez!');
+    return;
+  }
+
+  runQuery(
+    {
+      audioBlob: blob,
+      audioName: 'voice.' + audioExtension(mimeType),
+      durationSeconds: elapsed / 1000,
+    }
+  );
+}
+
+function cleanupRecording() {
+  clearTimeout(recordTimer);
+  recordTimer = null;
+  releaseStream();
+  if (recorder) {
+    recorder.onstop = null;
+    recorder.ondataavailable = null;
+    recorder.onerror = null;
+    if (recorder.state !== 'inactive') {
+      try { recorder.stop(); } catch (_) {}
+    }
+  }
+  recorder = null;
+  isRecording = false;
+  isStartingVoice = false;
+}
+
+function releaseStream() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+}
+
+function audioExtension(mimeType) {
+  if (mimeType.includes('mp4')) return 'm4a';
+  if (mimeType.includes('ogg')) return 'ogg';
+  if (mimeType.includes('mpeg')) return 'mp3';
+  return 'webm';
+}
+
+// ─── Camera capture (real photo upload, same query operation) ─────────────────
+async function openCamera() {
+  if (isAboutOpen || isBusy) return;
+  if (!hasDeviceAccess()) return;
+  stopSpeaking();
+  // R1 Creations support getUserMedia, while their WebView need not implement
+  // the native file chooser behind <input capture>. Keep capture in the page.
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    camInput.click();
+    return;
+  }
+  const generation = ++cameraGeneration;
+  isBusy = true;
+  isCameraOpen = true;
+  appEl.hidden = true;
+  cameraPanel.hidden = false;
+  cameraShoot.disabled = true;
+  cameraStatus.textContent = 'A abrir a câmara...';
+  cameraTimer = setTimeout(() => {
+    if (generation === cameraGeneration) cameraFailed('Não consegui abrir a câmara. Tenta outra vez!');
+  }, CAMERA_TIMEOUT_MS);
+  try {
+    const constraints = {
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: PHOTO_MAX_SIDE }, height: { ideal: PHOTO_MAX_SIDE } },
+    };
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia(constraints); } catch (err) {
+      // Camera drivers may still be releasing the previous stream after stop().
+      if (err?.name !== 'NotReadableError' || generation !== cameraGeneration) throw err;
+      await new Promise(resolve => setTimeout(resolve, 250));
+      if (generation !== cameraGeneration) return;
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    }
+    if (generation !== cameraGeneration) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+    cameraStream = stream;
+    cameraVideo.onloadeddata = () => {
+      if (generation !== cameraGeneration || !cameraVideo.videoWidth || !cameraVideo.videoHeight) return;
+      clearTimeout(cameraTimer);
+      cameraTimer = null;
+      cameraShoot.disabled = false;
+      cameraStatus.textContent = 'Aponta e toca no círculo.';
+    };
+    cameraVideo.srcObject = stream;
+    await cameraVideo.play();
+    if (cameraVideo.readyState >= 2) cameraVideo.onloadeddata?.();
+  } catch (err) {
+    if (generation !== cameraGeneration) return;
+    const denied = err?.name === 'NotAllowedError';
+    cameraFailed(denied
+      ? 'A câmara precisa de permissão. Pede ajuda a um adulto.'
+      : 'Não consegui abrir a câmara. Tenta outra vez!', denied);
+  }
+}
+
+function closeCamera() {
+  cameraGeneration++;
+  clearTimeout(cameraTimer);
+  cameraTimer = null;
+  cameraVideo.onloadeddata = null;
+  cameraVideo.pause?.();
+  cameraVideo.srcObject = null;
+  if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+  cameraStream = null;
+  isCameraOpen = false;
+  cameraShoot.disabled = true;
+  cameraPanel.hidden = true;
+  appEl.hidden = false;
+  isBusy = false;
+  setUI('idle', '');
+}
+
+function cameraFailed(message, adultHelp = false) {
+  closeCamera();
+  fail(message, adultHelp);
+  statusEl.textContent = message;
+}
+
+function takePhoto() {
+  if (!isCameraOpen || cameraShoot.disabled) return;
+  cameraShoot.disabled = true;
+  cameraVideo.onloadeddata = null;
+  cameraStatus.textContent = 'A preparar a foto...';
+  const generation = cameraGeneration;
+  cameraTimer = setTimeout(() => {
+    if (generation === cameraGeneration) cameraFailed('Não consegui tirar a foto. Tenta outra vez!');
+  }, CAMERA_TIMEOUT_MS);
+  try {
+    const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(cameraVideo.videoWidth, cameraVideo.videoHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(cameraVideo.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(cameraVideo.videoHeight * scale));
+    canvas.getContext('2d').drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+      if (generation !== cameraGeneration) return;
+      closeCamera();
+      if (!blob || !blob.size) {
+        fail('Não consegui tirar a foto. Tenta outra vez!');
+        return;
+      }
+      return submitPhoto(blob, false);
+    }, 'image/jpeg', PHOTO_JPEG_QUALITY);
+  } catch (_) {
+    if (generation === cameraGeneration) cameraFailed('Não consegui tirar a foto. Tenta outra vez!');
+  }
+}
+
+camInput.addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file || isBusy) return;
+  return submitPhoto(file);
+});
+
+async function submitPhoto(file, reencode = true) {
+  if (!file.type || !file.type.startsWith('image/')) {
+    fail('Escolhe uma foto.');
+    return;
+  }
+
+  flashScreen();
+  isBusy = true;
+  showLoading();
+  const generation = cameraGeneration;
+  let photo;
+  try { photo = reencode ? await shrinkPhoto(file) : file; } catch (_) {
+    if (generation === cameraGeneration) fail('Não consegui preparar a foto. Tenta outra vez!');
+    return;
+  }
+  if (generation !== cameraGeneration) return;
+  if (photo === file && !UPLOADABLE_IMAGE_TYPES.includes(file.type)) {
+    fail('Esse tipo de foto não dá. Tira outra!');
+    return;
+  }
+  if (photo.size > MAX_IMAGE_BYTES) {
+    fail('Foto demasiado grande. Tenta outra!');
+    return;
+  }
+  return runQuery(
+    { imageBlob: photo, imageName: photo === file ? (file.name || 'photo.jpg') : 'photo.jpg' }
+  );
+}
+
+// Re-encodes the photo as a JPEG of at most PHOTO_MAX_SIDE pixels. Returns the
+// original file when the browser cannot decode it (e.g. HEIC).
+function shrinkPhoto(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => resolve(blob || file), 'image/jpeg', PHOTO_JPEG_QUALITY);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+function setUI(state, status) {
+  uiState = state;
+  appEl.setAttribute('data-state', state);
+  statusEl.textContent = status;
+  voiceLabel.textContent = {
+    idle: 'Toca em mim!', starting: 'Um momento...', listening: 'Estou a ouvir!',
+    thinking: 'Hmm, deixa ver', speaking: 'Ouve!', error: 'Ups! Tenta outra vez.', unavailable: 'Chama um adulto.'
+  }[state];
+  const capturing = state === 'starting' || state === 'listening';
+  voiceBtn.setAttribute('aria-pressed', String(capturing));
+  voiceBtn.setAttribute('aria-label', capturing ? 'Terminar a gravação' : 'Começar a gravar a pergunta');
+  voiceBtn.disabled = state === 'thinking';
+  cameraBtn.disabled = capturing || state === 'thinking';
+  aboutBtn.disabled = capturing || state === 'thinking';
+  updateReplay();
+}
+function showAbout() {
+  if (isBusy || isRecording || isStartingVoice) return;
+  isAboutOpen = true;
+  appEl.hidden = true;
+  aboutPanel.hidden = false;
+  aboutClose.focus?.();
+}
+function closeAbout() {
+  if (isHistoryOpen) closeHistory();
+  isAboutOpen = false;
+  aboutPanel.hidden = true;
+  appEl.hidden = false;
+  aboutBtn.focus?.();
+}
+
+// ─── Adult settings and history (behind "i") ──────────────────────────────────
+function renderAge() {
+  ageValue.textContent = childAge + ' anos';
+  ageDown.disabled = childAge <= MIN_AGE;
+  ageUp.disabled = childAge >= MAX_AGE;
+}
+
+function changeAge(delta) {
+  const next = Math.min(MAX_AGE, Math.max(MIN_AGE, childAge + delta));
+  if (next === childAge) return;
+  childAge = next;
+  renderAge();
+  if (preferencesLoaded) storeItem(AGE_STORAGE_KEY, String(childAge));
+  else ageChangedBeforeLoad = true;
+}
+
+// The list is built only while the panel is open and emptied when it closes.
+function showHistory() {
+  isHistoryOpen = true;
+  aboutPanel.hidden = true;
+  historyPanel.hidden = false;
+  renderHistory();
+  historyClose.focus?.();
+}
+
+function closeHistory() {
+  isHistoryOpen = false;
+  disarmClear();
+  historyList.textContent = '';
+  historyPanel.hidden = true;
+  aboutPanel.hidden = false;
+  historyBtn.focus?.();
+}
+
+function renderHistory() {
+  historyList.textContent = '';
+  historyEmpty.hidden = history.length > 0;
+  historyClear.disabled = history.length === 0;
+  for (const entry of history) {
+    const item = document.createElement('li');
+    item.appendChild(historyLine('when', formatWhen(entry.at)));
+    item.appendChild(historyLine('question', entry.question || 'Foto'));
+    item.appendChild(historyLine('answer', entry.answer));
+    historyList.appendChild(item);
+  }
+}
+
+function historyLine(className, text) {
+  const line = document.createElement('p');
+  line.className = className;
+  line.textContent = text;
+  return line;
+}
+
+function formatWhen(at) {
+  const date = new Date(at);
+  const pad = (n) => String(n).padStart(2, '0');
+  return pad(date.getDate()) + '/' + pad(date.getMonth() + 1) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+}
+
+// A first tap arms "Apagar"; a second tap within 3 s clears the history.
+function clearHistory() {
+  if (!clearArmedTimer) {
+    historyClear.textContent = 'Apagar tudo?';
+    clearArmedTimer = setTimeout(disarmClear, 3000);
+    return;
+  }
+  disarmClear();
+  history = [];
+  if (preferencesLoaded) saveHistory();
+  else historyClearedBeforeLoad = true; // loadPreferences drops the saved entries
+  renderHistory();
+}
+
+function disarmClear() {
+  clearTimeout(clearArmedTimer);
+  clearArmedTimer = null;
+  historyClear.textContent = 'Apagar';
+}
+
+// Settings and history live in the R1's hardware-encrypted creation storage
+// (Base64 of UTF-8), or localStorage outside the R1.
+// History writes run one at a time and each stores the history as it is
+// when the write starts, so a slow write can never land after a newer one.
+let historyWrites = Promise.resolve();
+function saveHistory() {
+  historyWrites = historyWrites.then(() => storeItem(HISTORY_STORAGE_KEY, JSON.stringify(history)));
+  return historyWrites;
+}
+
+async function storeItem(key, value) {
+  const secure = secureStorage();
+  if (secure) {
+    try {
+      await secure.setItem(key, btoa(unescape(encodeURIComponent(value))));
+      return;
+    } catch (_) {}
+  }
+  try { window.localStorage.setItem(key, value); } catch (_) {}
+}
+
+async function readItem(key) {
+  const secure = secureStorage();
+  if (secure) {
+    try {
+      const raw = await secure.getItem(key);
+      if (raw) return decodeURIComponent(escape(atob(raw)));
+    } catch (_) {}
+  }
+  try { return window.localStorage.getItem(key); } catch (_) { return null; }
+}
+
+function loadPreferences() {
+  preferencesLoading = readPreferences();
+  return preferencesLoading;
+}
+
+async function readPreferences() {
+  const age = Number(await readItem(AGE_STORAGE_KEY));
+  if (!ageChangedBeforeLoad && Number.isInteger(age) && age >= MIN_AGE && age <= MAX_AGE) childAge = age;
+  renderAge();
+  let saved = [];
+  try { saved = JSON.parse(await readItem(HISTORY_STORAGE_KEY) || '[]'); } catch (_) {}
+  const valid = Array.isArray(saved) && !historyClearedBeforeLoad
+    ? saved.filter(entry => entry && typeof entry.answer === 'string' && Number.isFinite(entry.at))
+    : [];
+  const changedWhileLoading = history.length > 0 || historyClearedBeforeLoad;
+  history = history.concat(valid).slice(0, MAX_HISTORY); // answers that arrived while loading stay first
+  preferencesLoaded = true;
+  if (changedWhileLoading) saveHistory();
+  if (ageChangedBeforeLoad) storeItem(AGE_STORAGE_KEY, String(childAge));
+  if (isHistoryOpen) renderHistory();
+}
+function showLoading() { setUI('thinking', ''); }
+function flashScreen() {
+  const d = document.createElement('div');
+  d.className = 'flash';
+  document.body.appendChild(d);
+  d.addEventListener('animationend', () => d.remove());
+}
+
+// ─── Button bindings ──────────────────────────────────────────────────────────
+voiceBtn.addEventListener('click', toggleVoice);
+cameraBtn.addEventListener('click', openCamera);
+cameraCancel.addEventListener('click', closeCamera);
+cameraShoot.addEventListener('click', takePhoto);
+aboutBtn.addEventListener('click', showAbout);
+aboutClose.addEventListener('click', closeAbout);
+replayBtn.addEventListener('click', replayAnswer);
+ageDown.addEventListener('click', () => changeAge(-1));
+ageUp.addEventListener('click', () => changeAge(1));
+historyBtn.addEventListener('click', showHistory);
+historyClose.addEventListener('click', closeHistory);
+historyClear.addEventListener('click', clearHistory);
+window.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && isHistoryOpen) closeHistory();
+  else if (event.key === 'Escape' && isAboutOpen) closeAbout();
+  if (event.key === 'Escape' && isCameraOpen) closeCamera();
+});
+
+// ─── R1 hardware events (PTT button + side button) ────────────────────────────
+window.addEventListener('longPressStart', () => {
+  if (isAboutOpen) return;
+  // Old R1 firmware without the voice bridge still handles PTT in Rabbit OS.
+  // Avoid opening a second microphone and suggesting our backend owns it.
+  if (!nativeVoiceBridge() && (typeof PluginMessageHandler !== 'undefined' || window.PluginMessageHandler)) {
+    if (!isBusy) setUI('idle', '');
+    return;
+  }
+  return startVoice();
+});
+window.addEventListener('longPressEnd',   stopVoice);
+window.addEventListener('sideClick', () => isCameraOpen ? takePhoto() : openCamera());
+window.addEventListener('pagehide', () => {
+  queryGeneration++;
+  if (activeQuery) activeQuery.abort();
+  closeCamera();
+  closeAbout();
+  captureGeneration++;
+  stopRequested = true;
+  cleanupNativeVoice(true);
+  cleanupRecording();
+  recordChunks = [];
+  isBusy = false;
+  stopSpeaking();
+  setUI('idle', '');
+});
+
+updateReplay();
+const preferencesReady = loadPreferences();
+
+// ─── Warm up browser TTS voice list (phone-browser fallback) ──────────────────
+if ('speechSynthesis' in window && window.speechSynthesis.onvoiceschanged !== undefined) {
+  window.speechSynthesis.onvoiceschanged = () => {};
+}
+</script>
+</body>
+</html>
