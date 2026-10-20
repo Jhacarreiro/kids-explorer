@@ -1,5 +1,7 @@
 # Kids Explorer (Explorador Curioso)
 
+Turn a Rabbit R1 into a European Portuguese question-and-answer companion for children. Kids can ask by voice or photo; families supply their own API keys and can follow the installation guide below.
+
 A Rabbit R1 Creation that lets a child ask questions by voice or with a photo and hear short answers in European Portuguese, spoken by the rabbit on the R1 screen.
 
 <a href="https://jhacarreiro.github.io/kids-explorer/install/"><img src="docs/r1-screen.png" width="240" alt="Kids Explorer on the Rabbit R1: a rabbit on a night sky says «Toca em mim!», with a camera button in the corner"></a>
