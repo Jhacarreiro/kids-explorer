@@ -508,8 +508,8 @@
 // Identifies the actual loaded page, independently of the installation URL.
 // Update both values whenever publishing a new Creation release.
 const APP_RELEASE = Object.freeze({
-  version: '2026.10.12.1',
-  published: '12 de outubro de 2026',
+  version: '2026.11.06.1',
+  published: '6 de novembro de 2026',
 });
 
 // ─── Two ways to answer ───────────────────────────────────────────────────────
@@ -797,6 +797,7 @@ function speak(text, onEnd) {
 // A speaking state that never ends keeps the rabbit animating on screen.
 // Every speech path therefore finishes within a bounded time.
 let speechEndTimer = null;
+const AUDIO_PROGRESS_CHECK_MS = 3000;
 function estimatedSpeechMs(text) {
   return Math.max(2500, String(text).length * 75);
 }
@@ -832,13 +833,27 @@ function browserSpeak(text, onEnd, portugalVoice = browserPortugalVoice()) {
   u.rate = 0.88;
   u.pitch = 1.1;
   u.voice = portugalVoice;
-  u.onend = () => { if (generation === speechGeneration && onEnd) onEnd(); };
+  let ended = false;
+  const done = () => {
+    if (ended || generation !== speechGeneration) return;
+    ended = true;
+    clearTimeout(speechEndTimer);
+    speechEndTimer = null;
+    if (onEnd) onEnd();
+  };
+  u.onend = done;
   u.onerror = (event) => {
     if (generation === speechGeneration && event.error !== 'interrupted' && event.error !== 'canceled') {
+      ended = true;
+      clearTimeout(speechEndTimer);
+      speechEndTimer = null;
       setUI('error', 'Não consegui falar. Tenta de novo.');
     }
   };
   synth.speak(u);
+  // Chrome can drop a long utterance without firing "end" or "error".
+  clearTimeout(speechEndTimer);
+  speechEndTimer = setTimeout(done, estimatedSpeechMs(text) + 4000);
 }
 
 // When the backend rendered the answer with a Portugal voice, play that
@@ -882,7 +897,22 @@ function playVoice(text, src, onEnd) {
     player.onended = finish;
     // Some WebViews never fire "ended" for data: audio; do not stay "speaking".
     // Audio that never started (a stalled download) is spoken by the device.
-    speechEndTimer = setTimeout(() => (playing ? finish() : fallback()), estimatedSpeechMs(text) + 4000);
+    // A long answer still playing past the estimate keeps going while its
+    // position moves; otherwise it is stopped before the rabbit goes idle, so
+    // no audio is left playing that a tap can no longer stop.
+    let position = -1;
+    const watchdog = () => {
+      if (settled || generation !== speechGeneration) return;
+      if (!playing) { fallback(); return; }
+      if (!player.paused && !player.ended && player.currentTime > position) {
+        position = player.currentTime;
+        speechEndTimer = setTimeout(watchdog, AUDIO_PROGRESS_CHECK_MS);
+        return;
+      }
+      try { player.pause(); } catch (_) {}
+      finish();
+    };
+    speechEndTimer = setTimeout(watchdog, estimatedSpeechMs(text) + 4000);
     player.onerror = fallback;
     const started = player.play();
     if (started && typeof started.then === 'function') started.then(() => { playing = true; }, fallback);
@@ -934,7 +964,7 @@ async function runQuery(parts) {
     if (!result.ok) {
       const adultHelp = ['provider_billing_inactive', 'provider_quota_exceeded',
         'provider_auth_missing', 'provider_auth_rejected', 'device_auth_required',
-        'device_transcription_required'].includes(result.data?.error?.code);
+        'device_transcription_required', 'daily_limit_reached'].includes(result.data?.error?.code);
       fail(serverErrorMessage(result.data) || 'Não consegui responder. Tenta outra vez!', adultHelp);
       return;
     }
