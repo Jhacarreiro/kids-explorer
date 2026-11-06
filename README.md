@@ -4,7 +4,7 @@ Turn a Rabbit R1 into a European Portuguese question-and-answer companion for ch
 
 A Rabbit R1 Creation that lets a child ask questions by voice or with a photo and hear short answers in European Portuguese, spoken by the rabbit on the R1 screen.
 
-<a href="https://jhacarreiro.github.io/kids-explorer/install/"><img src="docs/r1-screen.png" width="240" alt="Kids Explorer on the Rabbit R1: a rabbit on a night sky says «Toca em mim!», with a camera button in the corner"></a>
+<a href="https://jhacarreiro.github.io/kids-explorer/install/"><img src="docs/r1-screen.png" width="240" alt="Kids Explorer on the Rabbit R1: a rabbit on a night sky says «Toca em mim!», with a large yellow speaker button to hear the last answer again and a camera button"></a>
 
 ## Install on your Rabbit R1
 
@@ -16,6 +16,8 @@ It runs on your own keys: the R1 talks directly to OpenAI (and, optionally, Azur
 4. **Start exploring.** Open **Explorador Curioso** from its card. Tap the rabbit to ask a question, or the round camera button to ask about something you can see. When the photo shows writing, such as a book page, a sign or a package, the rabbit reads it aloud instead, translated into European Portuguese when needed.
 
 The QR code contains your keys, so treat it like a password: anyone who scans it can spend on your accounts. If it leaks, delete the key at OpenAI and generate a new QR. No account is needed for the child; questions, answers and history stay on the R1 and your own OpenAI account. The small **i** at the top holds the adult settings: the child's age and the history kept on the device.
+
+After an answer, the large yellow speaker button, **Ouvir de novo**, plays the last answer again from the beginning. It reuses the same audio when available, without sending another question or generating a new answer. It stays available for the current visit, even after the conversation context expires; reloading the Creation clears it. When speech uses the device voice, it reads the same answer again. Retry guidance appears only in the rabbit's speech bubble, without a duplicate message underneath.
 
 ## How it works
 

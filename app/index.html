@@ -141,19 +141,24 @@
     }
     #camera-btn svg { width: 28px; height: 28px; }
     #camera-btn:disabled { opacity: 0.35; }
-    /* Hear the last answer again; only while the conversation is fresh. */
+    /* A large speaker and a short label make replay easy to find. */
     #replay-btn {
       position: absolute;
       left: 10px; bottom: 10px;
-      width: 52px; height: 52px;
-      display: grid; place-items: center;
+      width: 136px; height: 56px;
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px;
+      padding: 8px 10px;
       border: none;
-      border-radius: 50%;
+      border-radius: 28px;
       background: var(--sun);
       color: #0C1D33;
       box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.05;
     }
-    #replay-btn svg { width: 28px; height: 28px; }
+    #replay-btn svg { width: 40px; height: 40px; flex-shrink: 0; }
 
     /* ─── Rabbit faces per state ────────────────────── */
     .face { display: none; }
@@ -437,8 +442,9 @@
 
   <div id="status" role="status" aria-live="polite"></div>
 
-  <button id="replay-btn" type="button" aria-label="Ouvir outra vez" hidden>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>
+  <button id="replay-btn" type="button" aria-label="Ouvir de novo a última resposta" hidden>
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 12h6l8-7v22l-8-7H3z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M22 10a9 9 0 0 1 0 12m5-17a16 16 0 0 1 0 22" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+    <span aria-hidden="true">Ouvir<br>de novo</span>
   </button>
 
   <button id="camera-btn" type="button" aria-label="Tirar uma fotografia">
@@ -508,7 +514,7 @@
 // Identifies the actual loaded page, independently of the installation URL.
 // Update both values whenever publishing a new Creation release.
 const APP_RELEASE = Object.freeze({
-  version: '2026.11.06.1',
+  version: '2026.11.06.2',
   published: '6 de novembro de 2026',
 });
 
@@ -723,7 +729,6 @@ let activeQuery = null;
 let conversation = [];
 let lastTurnAt = 0;
 let lastAnswer = null;
-let replayTimer = null;
 let childAge = DEFAULT_AGE;
 let history = [];
 let isHistoryOpen = false;
@@ -1202,12 +1207,6 @@ function rememberTurn(question, answer, followups, audio) {
   conversation = recentConversation().concat({ question, answer, followups }).slice(-MAX_CONTEXT_TURNS);
   lastTurnAt = now;
   lastAnswer = { text: spokenText(answer, followups), audio };
-  clearTimeout(replayTimer);
-  replayTimer = setTimeout(() => {
-    replayTimer = null;
-    lastAnswer = null;
-    updateReplay();
-  }, CONVERSATION_MS);
   history = [{ at: now, question, answer }].concat(history).slice(0, MAX_HISTORY);
   if (preferencesLoaded) saveHistory();
 }
@@ -1233,7 +1232,7 @@ function updateReplay() {
 function fail(message, adultHelp = false) {
   isBusy = false;
   isStartingVoice = false;
-  setUI(adultHelp ? 'unavailable' : 'error', adultHelp ? 'Pede ajuda a um adulto.' : 'Tenta outra vez!');
+  setUI(adultHelp ? 'unavailable' : 'error', adultHelp ? 'Pede ajuda a um adulto.' : '');
   if (adultHelp) speak(message);
   else playVoice(message, ownKeys ? null : backendUrl(OOPS_AUDIO_PATH));
 }
